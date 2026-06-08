@@ -13,7 +13,11 @@ export async function uploadAvatarToStorage(username: string, imageUrl: string):
     const buffer = await res.arrayBuffer()
     const contentType = res.headers.get('content-type') || 'image/jpeg'
     const ext = contentType.includes('png') ? 'png' : 'jpg'
-    const filePath = `${username}.${ext}`
+    // Normaliza o username para um caminho de arquivo determinístico (sem '@',
+    // sem espaços, minúsculo) — os callers passam o instagram em formatos
+    // diferentes (com/sem '@', maiúsculas), o que gerava avatares duplicados.
+    const cleanUsername = username.replace('@', '').trim().toLowerCase()
+    const filePath = `${cleanUsername}.${ext}`
 
     const { error } = await supabaseAdmin.storage
       .from('avatars')
