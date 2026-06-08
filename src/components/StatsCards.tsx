@@ -1,5 +1,4 @@
 import type { Mentorado } from '@/lib/supabase'
-import { calcGrowth } from '@/lib/utils'
 
 type Props = {
   mentorados: Mentorado[]
@@ -18,8 +17,8 @@ export default function StatsCards({ mentorados }: Props) {
   const cards = [
     { label: 'Total Mentorados', value: total, color: 'bg-brand-600', icon: '👥', badge: 'Mentorados', percent: null },
     { label: 'Ganhou +100 mil seguidores', value: gained100k, color: 'bg-green-500', icon: '🏆', badge: null, percent: pct(gained100k) },
-    { label: 'Ganhou +30 mil seguidores', value: gained30k, color: 'bg-brand-600', icon: '🔥', badge: null, percent: pct(gained30k) },
-    { label: 'Ganhou +10 mil seguidores', value: gained10k, color: 'bg-brand-400', icon: '💪', badge: null, percent: pct(gained10k) },
+    { label: 'Ganhou 30 mil – 100 mil', value: gained30k, color: 'bg-brand-600', icon: '🔥', badge: null, percent: pct(gained30k) },
+    { label: 'Ganhou 10 mil – 30 mil', value: gained10k, color: 'bg-brand-400', icon: '💪', badge: null, percent: pct(gained10k) },
     { label: 'Ganhou menos de 10 mil', value: gainedUnder10k, color: 'bg-red-500', icon: '🆘', badge: null, percent: pct(gainedUnder10k) },
   ]
 

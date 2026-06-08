@@ -210,9 +210,9 @@ export default function Filters({
         <select value={growthFilter} onChange={(e) => onGrowthChange(e.target.value)} className={selectClass}>
           <option value="">Todos os ganhos</option>
           <option value="100k">🏆 Ganhou +100 mil seguidores</option>
-          <option value="30k">🔥 Ganhou +30 mil seguidores</option>
-          <option value="10k">💪 Ganhou +10 mil seguidores</option>
-          <option value="under10k">🆘 Ganhou -10 mil seguidores</option>
+          <option value="30k">🔥 Ganhou 30 mil – 100 mil</option>
+          <option value="10k">💪 Ganhou 10 mil – 30 mil</option>
+          <option value="under10k">🆘 Ganhou menos de 10 mil</option>
         </select>
         <select value={sort} onChange={(e) => onSortChange(e.target.value)} className={selectClass}>
           <option value="nome">Ordenar: Nome</option>
