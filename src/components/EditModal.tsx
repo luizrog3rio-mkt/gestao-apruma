@@ -23,6 +23,7 @@ export default function EditModal({ mentorado, onClose, onSave, onDelete, userRo
     seguidores_atual: mentorado.seguidores_atual,
   })
   const [saving, setSaving] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
   const isAdmin = userRole === 'admin'
   const canManageStatus = userRole === 'admin' || userRole === 'gerente'
@@ -86,6 +87,28 @@ export default function EditModal({ mentorado, onClose, onSave, onDelete, userRo
     onSave()
   }
 
+  const handleForceRefresh = async () => {
+    setRefreshing(true)
+    try {
+      const cleanIg = form.instagram.replace('@', '').trim()
+      const res = await fetch('/api/update-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mentoradoId: mentorado.id, instagram: cleanIg }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        alert(`Instagram atualizado! Seguidores: ${data.follower_count?.toLocaleString('pt-BR') ?? '-'} • Posts/7d: ${data.posts_last_7d ?? 0}`)
+        onSave()
+      } else {
+        alert('Não foi possível puxar esse perfil. Verifique se o @ está correto e tente novamente.')
+      }
+    } catch {
+      alert('Erro ao conectar com o Instagram. Tente novamente.')
+    }
+    setRefreshing(false)
+  }
+
   const handleDelete = async () => {
     if (!confirm(`Tem certeza que deseja excluir ${mentorado.nome}?`)) return
     const { error } = await supabase
@@ -127,6 +150,15 @@ export default function EditModal({ mentorado, onClose, onSave, onDelete, userRo
             {instagramChanged && (
               <p className="text-xs text-brand-600 mt-1">Ao salvar, os dados do Instagram serão atualizados automaticamente</p>
             )}
+            <button
+              type="button"
+              onClick={handleForceRefresh}
+              disabled={refreshing}
+              className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-600 border border-brand-200 hover:bg-brand-50 rounded-lg transition-colors disabled:opacity-50"
+              title="Força a busca dos dados do Instagram para este perfil agora"
+            >
+              {refreshing ? '🔄 Atualizando...' : '🔄 Forçar atualização do Instagram'}
+            </button>
           </div>
           <div>
             <label className={labelClass}>Nicho</label>
@@ -171,10 +203,11 @@ export default function EditModal({ mentorado, onClose, onSave, onDelete, userRo
             <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium ${
               mentorado.status === 'cancelou' ? 'bg-red-50 text-red-700 border border-red-200'
                 : mentorado.status === 'finalizou' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                : mentorado.status === 'reembolsado' ? 'bg-slate-100 text-slate-700 border border-slate-300'
                 : 'bg-amber-50 text-amber-700 border border-amber-200'
             }`}>
-              <span>{mentorado.status === 'cancelou' ? '❌' : mentorado.status === 'finalizou' ? '🏁' : '⏸️'}</span>
-              {mentorado.status === 'cancelou' ? 'Cancelou' : mentorado.status === 'finalizou' ? 'Finalizou' : 'Pausou'}
+              <span>{mentorado.status === 'cancelou' ? '❌' : mentorado.status === 'finalizou' ? '🏁' : mentorado.status === 'reembolsado' ? '💸' : '⏸️'}</span>
+              {mentorado.status === 'cancelou' ? 'Cancelou' : mentorado.status === 'finalizou' ? 'Finalizou' : mentorado.status === 'reembolsado' ? 'Reembolsou' : 'Pausou'}
               {mentorado.status_at && (
                 <span className="text-xs opacity-70">
                   em {new Date(mentorado.status_at).toLocaleDateString('pt-BR')}
@@ -183,13 +216,14 @@ export default function EditModal({ mentorado, onClose, onSave, onDelete, userRo
               {isAdmin && (
                 <button
                   onClick={async () => {
+                    if (!confirm('Reativar este mentorado (voltar para Ativo)?')) return
                     await supabase.from('mentorados').update({ status: 'ativo', status_at: null }).eq('id', mentorado.id)
                     alert('Status reativado!')
                     onSave()
                   }}
-                  className="ml-auto text-xs underline hover:no-underline"
+                  className="ml-auto flex-shrink-0 px-3 py-1.5 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors"
                 >
-                  Reativar
+                  ↩️ Reativar
                 </button>
               )}
             </div>
@@ -197,8 +231,8 @@ export default function EditModal({ mentorado, onClose, onSave, onDelete, userRo
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-between p-6 border-t border-gray-100">
-          <div className="flex gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-6 border-t border-gray-100">
+          <div className="flex flex-wrap gap-2">
             {canManageStatus && (
               <button
                 onClick={handleDelete}
@@ -241,6 +275,17 @@ export default function EditModal({ mentorado, onClose, onSave, onDelete, userRo
                   className="px-3 py-2 text-sm font-medium text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors border border-emerald-200"
                 >
                   🏁 Finalizou
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!confirm('Marcar como REEMBOLSOU?')) return
+                    await supabase.from('mentorados').update({ status: 'reembolsado', status_at: new Date().toISOString() }).eq('id', mentorado.id)
+                    alert('Marcado como reembolsou')
+                    onSave()
+                  }}
+                  className="px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors border border-slate-300"
+                >
+                  💸 Reembolsou
                 </button>
               </>
             )}
