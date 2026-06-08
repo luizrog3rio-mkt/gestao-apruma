@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase, type Mentorado } from '@/lib/supabase'
+import { authedFetch } from '@/lib/api-client'
 import { useUserRole } from '@/lib/useUserRole'
 import StatsCards from '@/components/StatsCards'
 import MentoradosTable from '@/components/MentoradosTable'
@@ -43,7 +44,7 @@ export default function Dashboard() {
   const updateFromInstagram = useCallback(async () => {
     setUpdating(true)
     try {
-      const res = await fetch('/api/update-posts', { method: 'POST' })
+      const res = await authedFetch('/api/update-posts', { method: 'POST' })
       if (res.ok) {
         const data = await res.json()
         console.log(`Updated ${data.updated}/${data.total} mentorados`)

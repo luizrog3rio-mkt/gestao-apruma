@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { supabase, type Mentorado } from '@/lib/supabase'
+import { authedFetch } from '@/lib/api-client'
 import type { UserRole } from '@/lib/useUserRole'
 
 type Props = {
@@ -65,7 +66,7 @@ export default function EditModal({ mentorado, onClose, onSave, onDelete, userRo
     // If instagram changed, fetch new profile data (followers, photo)
     if (instagramChanged) {
       try {
-        const res = await fetch('/api/update-profile', {
+        const res = await authedFetch('/api/update-profile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ mentoradoId: mentorado.id, instagram: cleanIg }),
@@ -91,7 +92,7 @@ export default function EditModal({ mentorado, onClose, onSave, onDelete, userRo
     setRefreshing(true)
     try {
       const cleanIg = form.instagram.replace('@', '').trim()
-      const res = await fetch('/api/update-profile', {
+      const res = await authedFetch('/api/update-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mentoradoId: mentorado.id, instagram: cleanIg }),

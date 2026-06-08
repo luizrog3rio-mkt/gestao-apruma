@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server'
 import { uploadAvatarToStorage } from '@/lib/avatar-storage'
+import { getRequestRole } from '@/lib/api-auth'
 
 export async function POST(request: Request) {
+  const auth = await getRequestRole(request)
+  if (!auth || !['admin', 'gerente'].includes(auth.role)) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  }
   try {
     const { username, imageUrl } = await request.json()
 

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { authedFetch } from '@/lib/api-client'
 import type { InstagramProfile } from '@/lib/instagram'
 import InstagramPreview from '@/components/InstagramPreview'
 
@@ -42,7 +43,7 @@ export default function CadastrarPage() {
     debounceRef.current = setTimeout(async () => {
       setIgLoading(true)
       try {
-        const res = await fetch(`/api/instagram/${encodeURIComponent(username)}`)
+        const res = await authedFetch(`/api/instagram/${encodeURIComponent(username)}`)
         if (res.ok) {
           const data: InstagramProfile = await res.json()
           setIgProfile(data)
@@ -57,7 +58,7 @@ export default function CadastrarPage() {
           }))
           // Upload avatar to permanent storage
           if (data.profile_pic_url) {
-            fetch('/api/upload-avatar', {
+            authedFetch('/api/upload-avatar', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ username, imageUrl: data.profile_pic_url }),

@@ -2,17 +2,22 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { fetchMultipleProfiles } from '@/lib/instagram'
 import { uploadAvatarToStorage } from '@/lib/avatar-storage'
+import { getRequestRole } from '@/lib/api-auth'
 
 export const maxDuration = 300
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
 const BATCH_SIZE = 20
 
-export async function POST() {
+export async function POST(request: Request) {
+  const auth = await getRequestRole(request)
+  if (!auth || auth.role !== 'admin') {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  }
   try {
     const { data: mentorados, error } = await supabaseAdmin
       .from('mentorados')
