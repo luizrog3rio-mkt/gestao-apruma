@@ -324,8 +324,10 @@ export default function SosCsPage() {
   const turmas = useMemo(() => [...new Set(mentorados.map((m) => m.turma))].sort(), [mentorados])
 
   const filtered = useMemo(() => {
-    if (!turmaFilter) return mentorados
-    return mentorados.filter((m) => m.turma === turmaFilter)
+    // Só mentorados ativos entram na cobrança (exclui pausou/cancelou/finalizou/reembolsado)
+    const active = mentorados.filter((m) => m.status === 'ativo')
+    if (!turmaFilter) return active
+    return active.filter((m) => m.turma === turmaFilter)
   }, [mentorados, turmaFilter])
 
   const classified = classifyMentorados(filtered)

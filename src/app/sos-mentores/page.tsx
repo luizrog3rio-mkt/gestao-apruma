@@ -253,7 +253,8 @@ export default function SosMentoresPage() {
   const turmas = useMemo(() => [...new Set(mentorados.map((m) => m.turma))].sort(), [mentorados])
 
   const filtered = useMemo(() => {
-    let result = mentorados
+    // Só mentorados ativos entram na cobrança (exclui pausou/cancelou/finalizou/reembolsado)
+    let result = mentorados.filter((m) => m.status === 'ativo')
     if (isMentor && userTurma) {
       result = result.filter((m) => m.turma === userTurma)
     } else if (turmaFilter) {

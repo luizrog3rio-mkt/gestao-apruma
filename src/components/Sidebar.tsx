@@ -31,6 +31,7 @@ function useSosCsBells(role: UserRole) {
       const { data: mentorados } = await supabase
         .from('mentorados')
         .select('id, posts')
+        .eq('status', 'ativo')
       if (!mentorados) return
 
       const sosCsIds = mentorados.filter((m) => m.posts < 3).map((m) => m.id)
