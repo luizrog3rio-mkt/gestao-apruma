@@ -19,9 +19,13 @@ export async function GET(request: Request) {
   }
 
   try {
+    // Só atualiza mentorados ativos: o ScrapeCreators cobra 1 crédito por perfil,
+    // e inativos (cancelou/pausou/finalizou/reembolsado) não aparecem nas telas de
+    // acompanhamento, então não vale gastar crédito atualizando-os todo dia.
     const { data: mentorados, error } = await supabaseAdmin
       .from('mentorados')
       .select('id, instagram, seguidores_atual')
+      .eq('status', 'ativo')
 
     if (error || !mentorados) {
       return NextResponse.json({ error: 'Failed to fetch mentorados' }, { status: 500 })

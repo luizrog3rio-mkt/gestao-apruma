@@ -1,4 +1,5 @@
-const APIFY_TOKEN = process.env.APIFY_TOKEN!
+const SCRAPECREATORS_API_KEY = process.env.SCRAPECREATORS_API_KEY!
+const SC_PROFILE_URL = 'https://api.scrapecreators.com/v1/instagram/profile'
 
 export type InstagramProfile = {
   username: string
@@ -11,100 +12,86 @@ export type InstagramProfile = {
   biography: string
 }
 
+// Formato GraphQL nativo do Instagram, que é o que o ScrapeCreators devolve em data.user.
+type ScUser = {
+  username?: string
+  full_name?: string
+  biography?: string
+  profile_pic_url?: string
+  profile_pic_url_hd?: string
+  edge_followed_by?: { count?: number }
+  edge_follow?: { count?: number }
+  edge_owner_to_timeline_media?: {
+    count?: number
+    edges?: { node?: { taken_at_timestamp?: number } }[]
+  }
+}
+
+function mapUser(user: ScUser, fallbackHandle: string): InstagramProfile {
+  // taken_at_timestamp vem em SEGUNDOS Unix. O endpoint traz ~12 posts recentes,
+  // o que é suficiente para contar os dos últimos 7 dias.
+  const sevenDaysAgoSec = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60
+  const edges = user.edge_owner_to_timeline_media?.edges || []
+  const postsLast7d = edges.filter(
+    (e) => (e.node?.taken_at_timestamp ?? 0) >= sevenDaysAgoSec
+  ).length
+
+  return {
+    username: user.username || fallbackHandle,
+    full_name: user.full_name || '',
+    profile_pic_url: user.profile_pic_url_hd || user.profile_pic_url || '',
+    follower_count: user.edge_followed_by?.count ?? 0,
+    following_count: user.edge_follow?.count ?? 0,
+    media_count: user.edge_owner_to_timeline_media?.count ?? 0,
+    posts_last_7d: postsLast7d,
+    biography: user.biography || '',
+  }
+}
 
 export async function fetchInstagramProfile(username: string): Promise<InstagramProfile | null> {
   try {
-    const cleanUsername = username.replace('@', '').trim()
-    const res = await fetch(
-      `https://api.apify.com/v2/acts/apify~instagram-profile-scraper/run-sync-get-dataset-items?token=${APIFY_TOKEN}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ usernames: [cleanUsername] }),
-      }
-    )
+    const handle = username.replace('@', '').trim()
+    if (!handle) return null
+
+    const res = await fetch(`${SC_PROFILE_URL}?handle=${encodeURIComponent(handle)}`, {
+      headers: { 'x-api-key': SCRAPECREATORS_API_KEY },
+    })
     if (!res.ok) return null
+
     const data = await res.json()
-    if (!Array.isArray(data) || !data[0]) return null
+    // Conta inexistente/privada/erro: a API responde 200 com { error, message } e sem data.user.
+    const user: ScUser | undefined = data?.data?.user
+    if (!user) return null
 
-    const profile = data[0]
-
-    // Skip if API returned no real data
-    if (profile.followersCount == null && profile.postsCount == null) return null
-
-    // Count posts from last 7 days
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
-    const latestPosts = profile.latestPosts || []
-    const postsLast7d = latestPosts.filter(
-      (p: { timestamp?: string }) => {
-        const ts = p.timestamp ? new Date(p.timestamp).getTime() : 0
-        return ts >= sevenDaysAgo
-      }
-    ).length
-
-    return {
-      username: profile.username || cleanUsername,
-      full_name: profile.fullName || '',
-      profile_pic_url: profile.profilePicUrlHD || profile.profilePicUrl || '',
-      follower_count: profile.followersCount ?? 0,
-      following_count: profile.followsCount ?? 0,
-      media_count: profile.postsCount ?? 0,
-      posts_last_7d: postsLast7d,
-      biography: profile.biography || '',
-    }
+    return mapUser(user, handle)
   } catch (err) {
-    console.error('Instagram API error:', err)
+    console.error('ScrapeCreators API error:', err)
     return null
   }
 }
+
+// O ScrapeCreators não tem endpoint em lote: buscamos cada handle individualmente,
+// com concorrência limitada para não disparar centenas de requests de uma vez.
+const CONCURRENCY = 6
 
 export async function fetchMultipleProfiles(usernames: string[]): Promise<Map<string, InstagramProfile>> {
   const results = new Map<string, InstagramProfile>()
   if (usernames.length === 0) return results
 
-  try {
-    const cleanUsernames = usernames.map((u) => u.replace('@', '').trim())
-    const res = await fetch(
-      `https://api.apify.com/v2/acts/apify~instagram-profile-scraper/run-sync-get-dataset-items?token=${APIFY_TOKEN}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ usernames: cleanUsernames }),
+  const queue = [...usernames]
+
+  async function worker() {
+    for (;;) {
+      const username = queue.shift()
+      if (username === undefined) return
+      const profile = await fetchInstagramProfile(username)
+      if (profile) {
+        results.set(username.replace('@', '').trim().toLowerCase(), profile)
       }
-    )
-    if (!res.ok) return results
-    const data = await res.json()
-    if (!Array.isArray(data)) return results
-
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
-
-    for (const profile of data) {
-      if (!profile.username) continue
-      // Skip profiles where the API returned no real data
-      if (profile.followersCount == null && profile.postsCount == null) continue
-
-      const latestPosts = profile.latestPosts || []
-      const postsLast7d = latestPosts.filter(
-        (p: { timestamp?: string }) => {
-          const ts = p.timestamp ? new Date(p.timestamp).getTime() : 0
-          return ts >= sevenDaysAgo
-        }
-      ).length
-
-      results.set(profile.username.toLowerCase(), {
-        username: profile.username,
-        full_name: profile.fullName || '',
-        profile_pic_url: profile.profilePicUrlHD || profile.profilePicUrl || '',
-        follower_count: profile.followersCount ?? 0,
-        following_count: profile.followsCount ?? 0,
-        media_count: profile.postsCount ?? 0,
-        posts_last_7d: postsLast7d,
-        biography: profile.biography || '',
-      })
     }
-  } catch (err) {
-    console.error('Instagram batch API error:', err)
   }
 
+  const workers = Array.from({ length: Math.min(CONCURRENCY, usernames.length) }, () => worker())
+  await Promise.all(workers)
   return results
 }
