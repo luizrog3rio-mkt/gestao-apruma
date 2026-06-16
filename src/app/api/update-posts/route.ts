@@ -60,11 +60,12 @@ export async function POST(request: Request) {
           if (r.status === 'ok') {
             const storageUrl = uploadResults.get(cleanIg)
             const updateFields: Record<string, unknown> = {
-              posts: r.profile.posts_last_7d,
               seguidores_atual: r.profile.follower_count,
               ig_issue: null,
               ig_issue_since: null,
             }
+            // posts só quando confiável (o fallback Looter nem sempre traz em perfis restritos).
+            if (r.postsReliable) updateFields.posts = r.profile.posts_last_7d
             if (storageUrl) updateFields.avatar = storageUrl
 
             await supabaseAdmin.from('mentorados').update(updateFields).eq('id', m.id)

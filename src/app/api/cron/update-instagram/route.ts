@@ -62,12 +62,14 @@ export async function GET(request: Request) {
           if (r.status === 'ok') {
             const storageUrl = uploadResults.get(cleanIg)
             const updateFields: Record<string, unknown> = {
-              posts: r.profile.posts_last_7d,
               seguidores_atual: r.profile.follower_count,
               // Limpa qualquer problema anterior: o @ voltou a ser puxado.
               ig_issue: null,
               ig_issue_since: null,
             }
+            // posts só quando a fonte trouxe os posts recentes (o fallback Looter
+            // nem sempre traz em perfis restritos) — evita zerar o posts/7d à toa.
+            if (r.postsReliable) updateFields.posts = r.profile.posts_last_7d
             // Só grava avatar se subiu pro Storage (nunca a URL do Instagram CDN, que expira).
             if (storageUrl) updateFields.avatar = storageUrl
 

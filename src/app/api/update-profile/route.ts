@@ -61,11 +61,12 @@ export async function POST(request: Request) {
 
     const updateFields: Record<string, unknown> = {
       seguidores_atual: profile.follower_count,
-      posts: profile.posts_last_7d,
       // O @ foi puxado com sucesso: limpa qualquer problema anterior.
       ig_issue: null,
       ig_issue_since: null,
     }
+    // posts só quando confiável (o fallback Looter nem sempre traz em perfis restritos).
+    if (result.postsReliable) updateFields.posts = profile.posts_last_7d
     if (storageUrl) updateFields.avatar = storageUrl
 
     await supabaseAdmin.from('mentorados').update(updateFields).eq('id', mentoradoId)
