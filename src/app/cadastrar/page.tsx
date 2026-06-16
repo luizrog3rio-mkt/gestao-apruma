@@ -23,6 +23,7 @@ export default function CadastrarPage() {
   })
   const [igProfile, setIgProfile] = useState<InstagramProfile | null>(null)
   const [igLoading, setIgLoading] = useState(false)
+  const [igError, setIgError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -35,6 +36,7 @@ export default function CadastrarPage() {
     const username = form.instagram.replace('@', '').trim()
     if (username.length < 2) {
       setIgProfile(null)
+      setIgError(null)
       return
     }
 
@@ -42,17 +44,19 @@ export default function CadastrarPage() {
 
     debounceRef.current = setTimeout(async () => {
       setIgLoading(true)
+      setIgError(null)
       try {
         const res = await authedFetch(`/api/instagram/${encodeURIComponent(username)}`)
         if (res.ok) {
           const data: InstagramProfile = await res.json()
           setIgProfile(data)
-          // Auto-fill
+          setIgError(null)
+          // Auto-fill. A foto só entra em form.avatar depois do upload pro Storage,
+          // porque a URL do Instagram CDN é bloqueada no navegador por CORP.
           setForm((prev) => ({
             ...prev,
             seguidores_inicial: data.follower_count,
             seguidores_atual: data.follower_count,
-            avatar: data.profile_pic_url || '',
             posts: data.posts_last_7d ?? prev.posts,
             ...(data.full_name && !prev.nome ? { nome: data.full_name } : {}),
           }))
@@ -73,9 +77,11 @@ export default function CadastrarPage() {
           }
         } else {
           setIgProfile(null)
+          setIgError('Não foi possível puxar esse @ automaticamente — ele pode estar privado/restrito, não existir, ou ser um erro temporário. Confira o @ ou preencha os dados manualmente.')
         }
       } catch {
         setIgProfile(null)
+        setIgError('Erro ao consultar o Instagram. Verifique a conexão e tente novamente.')
       }
       setIgLoading(false)
     }, 800)
@@ -136,8 +142,11 @@ export default function CadastrarPage() {
               value={form.instagram}
               onChange={(e) => handleChange('instagram', e.target.value)}
             />
+            {igError && (
+              <p className="text-xs text-amber-600 mt-1.5">⚠️ {igError}</p>
+            )}
           </div>
-          <InstagramPreview profile={igProfile} loading={igLoading} />
+          <InstagramPreview profile={igProfile} loading={igLoading} avatarUrl={form.avatar} />
         </div>
 
         <div>

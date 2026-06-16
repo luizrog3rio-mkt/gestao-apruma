@@ -6,9 +6,10 @@ import { formatNumber } from '@/lib/utils'
 type Props = {
   profile: InstagramProfile | null
   loading: boolean
+  avatarUrl?: string | null
 }
 
-export default function InstagramPreview({ profile, loading }: Props) {
+export default function InstagramPreview({ profile, loading, avatarUrl }: Props) {
   if (loading) {
     return (
       <div className="bg-white rounded-2xl border border-gray-200 p-6 animate-pulse">
@@ -29,8 +30,10 @@ export default function InstagramPreview({ profile, loading }: Props) {
     <div className="bg-white rounded-2xl border border-brand-200 p-6 animate-scale-in">
       <div className="flex items-center gap-4">
         <div className="w-14 h-14 rounded-full overflow-hidden bg-brand-100 flex-shrink-0">
-          {profile.profile_pic_url ? (
-            <img src={profile.profile_pic_url} alt={profile.username} className="w-full h-full object-cover" />
+          {avatarUrl && avatarUrl.includes('/storage/') ? (
+            // A foto do Instagram CDN é bloqueada no navegador por CORP (NotSameOrigin);
+            // por isso usamos a cópia espelhada no Supabase Storage (preenchida pelo upload).
+            <img src={avatarUrl} alt={profile.username} className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-brand-600 font-bold text-xl">
               {profile.username.charAt(0).toUpperCase()}
