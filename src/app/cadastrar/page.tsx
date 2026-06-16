@@ -102,7 +102,9 @@ export default function CadastrarPage() {
       seguidores_inicial: form.seguidores_inicial,
       seguidores_atual: form.seguidores_atual,
       posts: form.posts,
-      avatar: form.avatar || null,
+      // Só grava se o avatar já foi pro Storage; nunca a URL do Instagram CDN (expira).
+      // Se o upload ainda não terminou, fica null e o cron preenche depois.
+      avatar: form.avatar.includes('/storage/v1/object/public/') ? form.avatar : null,
     })
     setSubmitting(false)
     if (error) {

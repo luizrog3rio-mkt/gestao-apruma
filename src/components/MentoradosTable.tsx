@@ -16,6 +16,10 @@ function AvatarImg({ m, lastUpdate }: { m: Mentorado; lastUpdate?: string | null
       <img
         src={`${m.avatar}${lastUpdate ? `?t=${lastUpdate}` : ''}`}
         alt={m.nome}
+        loading="lazy"
+        decoding="async"
+        width={40}
+        height={40}
         className="w-full h-full object-cover"
         onError={(e) => { e.currentTarget.src = fallback }}
       />
@@ -25,6 +29,10 @@ function AvatarImg({ m, lastUpdate }: { m: Mentorado; lastUpdate?: string | null
     <img
       src={m.instagram ? `/api/avatar/${m.instagram}${lastUpdate ? `?t=${lastUpdate}` : ''}` : fallback}
       alt={m.nome}
+      loading="lazy"
+      decoding="async"
+      width={40}
+      height={40}
       className="w-full h-full object-cover"
       onError={(e) => { e.currentTarget.src = fallback }}
     />

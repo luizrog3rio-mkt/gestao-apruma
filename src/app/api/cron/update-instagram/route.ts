@@ -57,15 +57,18 @@ export async function GET(request: Request) {
 
         try {
           const storageUrl = uploadResults.get(cleanIg)
-          const avatarUrl = storageUrl || profile.profile_pic_url || undefined
+          // Só grava avatar se subiu pro Storage. Nunca persistir a URL do
+          // Instagram CDN: ela expira em horas e força a rota /api/avatar a
+          // cair no scraper síncrono (lento) na próxima leitura.
+          const updateFields: Record<string, unknown> = {
+            posts: profile.posts_last_7d,
+            seguidores_atual: profile.follower_count,
+          }
+          if (storageUrl) updateFields.avatar = storageUrl
 
           await supabaseAdmin
             .from('mentorados')
-            .update({
-              posts: profile.posts_last_7d,
-              seguidores_atual: profile.follower_count,
-              avatar: avatarUrl,
-            })
+            .update(updateFields)
             .eq('id', m.id)
 
           updated++
