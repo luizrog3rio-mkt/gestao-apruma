@@ -21,4 +21,6 @@ export type Mentorado = {
   status_at: string | null
   created_at: string
   updated_at: string
+  ig_issue: string | null
+  ig_issue_since: string | null
 }

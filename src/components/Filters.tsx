@@ -7,6 +7,7 @@ type Props = {
   turmaFilter: string
   planoFilter: string
   growthFilter: string
+  igFilter: string
   sort: string
   turmas: string[]
   dateFrom: string
@@ -15,6 +16,7 @@ type Props = {
   onTurmaChange: (v: string) => void
   onPlanoChange: (v: string) => void
   onGrowthChange: (v: string) => void
+  onIgFilterChange: (v: string) => void
   onSortChange: (v: string) => void
   onRefresh: () => void
   onDateFromChange: (v: string) => void
@@ -170,9 +172,9 @@ function DateFilter({
 }
 
 export default function Filters({
-  search, turmaFilter, planoFilter, growthFilter, sort, turmas,
+  search, turmaFilter, planoFilter, growthFilter, igFilter, sort, turmas,
   dateFrom, dateTo,
-  onSearchChange, onTurmaChange, onPlanoChange, onGrowthChange, onSortChange, onRefresh,
+  onSearchChange, onTurmaChange, onPlanoChange, onGrowthChange, onIgFilterChange, onSortChange, onRefresh,
   onDateFromChange, onDateToChange,
   hideTurmaFilter,
 }: Props) {
@@ -213,6 +215,12 @@ export default function Filters({
           <option value="30k">🔥 Ganhou 30 mil – 100 mil</option>
           <option value="10k">💪 Ganhou 10 mil – 30 mil</option>
           <option value="under10k">🆘 Ganhou menos de 10 mil</option>
+        </select>
+        <select value={igFilter} onChange={(e) => onIgFilterChange(e.target.value)} className={selectClass}>
+          <option value="">Instagram: todos</option>
+          <option value="issue">⚠️ Com problema</option>
+          <option value="not_found">Não encontrado</option>
+          <option value="restricted">Privado/restrito</option>
         </select>
         <select value={sort} onChange={(e) => onSortChange(e.target.value)} className={selectClass}>
           <option value="nome">Ordenar: Nome</option>

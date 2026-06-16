@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { fetchMultipleProfiles } from '@/lib/instagram'
+import { fetchProfilesWithStatus } from '@/lib/instagram'
 import { uploadAvatarToStorage } from '@/lib/avatar-storage'
 import { getRequestRole } from '@/lib/api-auth'
 
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   try {
     const { data: mentorados, error } = await supabaseAdmin
       .from('mentorados')
-      .select('id, instagram, seguidores_atual')
+      .select('id, instagram, ig_issue_since')
 
     if (error || !mentorados) {
       return NextResponse.json({ error: 'Failed to fetch mentorados' }, { status: 500 })
@@ -32,21 +32,17 @@ export async function POST(request: Request) {
 
     for (let i = 0; i < withInstagram.length; i += BATCH_SIZE) {
       const batch = withInstagram.slice(i, i + BATCH_SIZE)
-      const usernames = batch.map((m) => m.instagram)
+      const fetched = await fetchProfilesWithStatus(batch.map((m) => m.instagram))
 
-      const profiles = await fetchMultipleProfiles(usernames)
-
-      // Upload all avatars in parallel immediately (CDN URLs expire fast)
+      // Sobe os avatares dos perfis OK em paralelo (URLs do CDN expiram rápido).
       const avatarUploads = new Map<string, Promise<string | null>>()
       for (const m of batch) {
         const cleanIg = m.instagram.replace('@', '').trim().toLowerCase()
-        const profile = profiles.get(cleanIg)
-        if (profile?.profile_pic_url) {
-          avatarUploads.set(cleanIg, uploadAvatarToStorage(m.instagram, profile.profile_pic_url))
+        const r = fetched.get(cleanIg)
+        if (r?.status === 'ok' && r.profile.profile_pic_url) {
+          avatarUploads.set(cleanIg, uploadAvatarToStorage(m.instagram, r.profile.profile_pic_url))
         }
       }
-
-      // Wait for all uploads to finish
       const uploadResults = new Map<string, string | null>()
       for (const [ig, promise] of avatarUploads) {
         uploadResults.set(ig, await promise)
@@ -54,32 +50,42 @@ export async function POST(request: Request) {
 
       for (const m of batch) {
         const cleanIg = m.instagram.replace('@', '').trim().toLowerCase()
-        const profile = profiles.get(cleanIg)
-        if (!profile) {
-          results.push({ instagram: m.instagram, posts_7d: 0, followers: 0, status: 'not_found' })
+        const r = fetched.get(cleanIg)
+        if (!r || r.status === 'error') {
+          results.push({ instagram: m.instagram, posts_7d: 0, followers: 0, status: 'error' })
           continue
         }
 
         try {
-          const storageUrl = uploadResults.get(cleanIg)
-          // Só grava avatar se subiu pro Storage (nunca a URL do Instagram CDN, que expira).
-          const updateFields: Record<string, unknown> = {
-            posts: profile.posts_last_7d,
-            seguidores_atual: profile.follower_count,
+          if (r.status === 'ok') {
+            const storageUrl = uploadResults.get(cleanIg)
+            const updateFields: Record<string, unknown> = {
+              posts: r.profile.posts_last_7d,
+              seguidores_atual: r.profile.follower_count,
+              ig_issue: null,
+              ig_issue_since: null,
+            }
+            if (storageUrl) updateFields.avatar = storageUrl
+
+            await supabaseAdmin.from('mentorados').update(updateFields).eq('id', m.id)
+
+            results.push({
+              instagram: m.instagram,
+              posts_7d: r.profile.posts_last_7d,
+              followers: r.profile.follower_count,
+              status: 'updated',
+            })
+          } else {
+            // not_found ou restricted: sinaliza, preservando a data da 1ª detecção.
+            await supabaseAdmin
+              .from('mentorados')
+              .update({
+                ig_issue: r.status,
+                ig_issue_since: m.ig_issue_since || new Date().toISOString(),
+              })
+              .eq('id', m.id)
+            results.push({ instagram: m.instagram, posts_7d: 0, followers: 0, status: r.status })
           }
-          if (storageUrl) updateFields.avatar = storageUrl
-
-          await supabaseAdmin
-            .from('mentorados')
-            .update(updateFields)
-            .eq('id', m.id)
-
-          results.push({
-            instagram: m.instagram,
-            posts_7d: profile.posts_last_7d,
-            followers: profile.follower_count,
-            status: 'updated',
-          })
         } catch {
           results.push({ instagram: m.instagram, posts_7d: 0, followers: 0, status: 'error' })
         }

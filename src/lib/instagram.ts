@@ -12,6 +12,19 @@ export type InstagramProfile = {
   biography: string
 }
 
+// Motivo de um @ não poder ser puxado (persistido em mentorados.ig_issue):
+// - not_found: a conta não existe (provável troca de @ ou conta removida)
+// - restricted: a conta existe mas é privada/restrita (scraper não acessa)
+export type IgIssue = 'not_found' | 'restricted'
+
+// Resultado discriminado. 'error' = falha transitória (rede, rate limit, 5xx):
+// NUNCA deve marcar o perfil como problemático, para não gerar falso alarme.
+export type ProfileFetchResult =
+  | { status: 'ok'; profile: InstagramProfile }
+  | { status: 'not_found'; profile: null }
+  | { status: 'restricted'; profile: null }
+  | { status: 'error'; profile: null }
+
 // Formato GraphQL nativo do Instagram, que é o que o ScrapeCreators devolve em data.user.
 type ScUser = {
   username?: string
@@ -48,34 +61,51 @@ function mapUser(user: ScUser, fallbackHandle: string): InstagramProfile {
   }
 }
 
-export async function fetchInstagramProfile(username: string): Promise<InstagramProfile | null> {
+export async function fetchProfileWithStatus(username: string): Promise<ProfileFetchResult> {
   try {
     const handle = username.replace('@', '').trim()
-    if (!handle) return null
+    if (!handle) return { status: 'error', profile: null }
 
     const res = await fetch(`${SC_PROFILE_URL}?handle=${encodeURIComponent(handle)}`, {
       headers: { 'x-api-key': SCRAPECREATORS_API_KEY },
     })
-    if (!res.ok) return null
+    // Erro HTTP (rate limit, 5xx, etc.) é transitório: não classifica como problema.
+    if (!res.ok) return { status: 'error', profile: null }
 
     const data = await res.json()
-    // Conta inexistente/privada/erro: a API responde 200 com { error, message } e sem data.user.
-    const user: ScUser | undefined = data?.data?.user
-    if (!user) return null
+    if (data?.data?.user) return { status: 'ok', profile: mapUser(data.data.user, handle) }
 
-    return mapUser(user, handle)
+    // Sem data.user: a API responde 200 com { error, message }. Distinguir os casos.
+    const msg = (data?.message || '').toLowerCase()
+    if (msg.includes('restrict')) return { status: 'restricted', profile: null }
+    if (
+      data?.errorStatus === 404 ||
+      data?.error === 'not_found' ||
+      msg.includes("doesn't exist") ||
+      msg.includes('not found')
+    ) {
+      return { status: 'not_found', profile: null }
+    }
+    // Resposta inesperada: trata como transitório para não marcar errado.
+    return { status: 'error', profile: null }
   } catch (err) {
     console.error('ScrapeCreators API error:', err)
-    return null
+    return { status: 'error', profile: null }
   }
 }
 
+export async function fetchInstagramProfile(username: string): Promise<InstagramProfile | null> {
+  return (await fetchProfileWithStatus(username)).profile
+}
+
 // O ScrapeCreators não tem endpoint em lote: buscamos cada handle individualmente,
-// com concorrência limitada para não disparar centenas de requests de uma vez.
+// com concorrência limitada. Retorna o resultado (com status) por handle minúsculo.
 const CONCURRENCY = 6
 
-export async function fetchMultipleProfiles(usernames: string[]): Promise<Map<string, InstagramProfile>> {
-  const results = new Map<string, InstagramProfile>()
+export async function fetchProfilesWithStatus(
+  usernames: string[]
+): Promise<Map<string, ProfileFetchResult>> {
+  const results = new Map<string, ProfileFetchResult>()
   if (usernames.length === 0) return results
 
   const queue = [...usernames]
@@ -84,10 +114,8 @@ export async function fetchMultipleProfiles(usernames: string[]): Promise<Map<st
     for (;;) {
       const username = queue.shift()
       if (username === undefined) return
-      const profile = await fetchInstagramProfile(username)
-      if (profile) {
-        results.set(username.replace('@', '').trim().toLowerCase(), profile)
-      }
+      const result = await fetchProfileWithStatus(username)
+      results.set(username.replace('@', '').trim().toLowerCase(), result)
     }
   }
 

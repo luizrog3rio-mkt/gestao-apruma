@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { fetchInstagramProfile } from '@/lib/instagram'
+import { fetchProfileWithStatus } from '@/lib/instagram'
 import { uploadAvatarToStorage } from '@/lib/avatar-storage'
 import { getRequestRole } from '@/lib/api-auth'
 
@@ -24,30 +24,51 @@ export async function POST(request: Request) {
     }
 
     const cleanUsername = instagram.replace('@', '').trim()
-    const profile = await fetchInstagramProfile(cleanUsername)
+    const result = await fetchProfileWithStatus(cleanUsername)
 
-    if (!profile) {
-      return NextResponse.json({ error: 'Perfil não encontrado' }, { status: 404 })
+    if (result.status !== 'ok') {
+      if (result.status === 'not_found' || result.status === 'restricted') {
+        // Sinaliza o problema, preservando a data da 1ª detecção.
+        const { data: cur } = await supabaseAdmin
+          .from('mentorados')
+          .select('ig_issue_since')
+          .eq('id', mentoradoId)
+          .single()
+        await supabaseAdmin
+          .from('mentorados')
+          .update({
+            ig_issue: result.status,
+            ig_issue_since: cur?.ig_issue_since || new Date().toISOString(),
+          })
+          .eq('id', mentoradoId)
+        return NextResponse.json(
+          { error: 'Perfil não encontrado', issue: result.status },
+          { status: 404 }
+        )
+      }
+      // Erro transitório: não marca nada.
+      return NextResponse.json({ error: 'Erro temporário ao consultar o Instagram' }, { status: 502 })
     }
 
-    // Sobe o avatar pro Storage. Só persiste se o upload deu certo — nunca
-    // grava a URL do Instagram CDN (expira em horas e quebra o avatar depois).
+    const profile = result.profile
+
+    // Sobe o avatar pro Storage. Só persiste se o upload deu certo — nunca grava
+    // a URL do Instagram CDN (expira e é bloqueada no navegador por CORP).
     let storageUrl: string | null = null
     if (profile.profile_pic_url) {
       storageUrl = await uploadAvatarToStorage(cleanUsername, profile.profile_pic_url)
     }
 
-    // Update database
     const updateFields: Record<string, unknown> = {
       seguidores_atual: profile.follower_count,
       posts: profile.posts_last_7d,
+      // O @ foi puxado com sucesso: limpa qualquer problema anterior.
+      ig_issue: null,
+      ig_issue_since: null,
     }
     if (storageUrl) updateFields.avatar = storageUrl
 
-    await supabaseAdmin
-      .from('mentorados')
-      .update(updateFields)
-      .eq('id', mentoradoId)
+    await supabaseAdmin.from('mentorados').update(updateFields).eq('id', mentoradoId)
 
     return NextResponse.json({
       follower_count: profile.follower_count,

@@ -21,6 +21,7 @@ export default function Dashboard() {
   const [turmaFilter, setTurmaFilter] = useState('')
   const [planoFilter, setPlanoFilter] = useState('')
   const [growthFilter, setGrowthFilter] = useState('')
+  const [igFilter, setIgFilter] = useState('')
   const [sort, setSort] = useState('nome')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -82,6 +83,9 @@ export default function Dashboard() {
           if (growthFilter === '10k' && (gained < 10000 || gained >= 30000)) return false
           if (growthFilter === 'under10k' && gained >= 10000) return false
         }
+        if (igFilter === 'issue' && !m.ig_issue) return false
+        if (igFilter === 'not_found' && m.ig_issue !== 'not_found') return false
+        if (igFilter === 'restricted' && m.ig_issue !== 'restricted') return false
         return true
       })
       .sort((a, b) => {
@@ -93,7 +97,12 @@ export default function Dashboard() {
           default: return 0
         }
       })
-  }, [mentorados, search, turmaFilter, planoFilter, growthFilter, sort, isMentor, userTurma, dateFrom, dateTo])
+  }, [mentorados, search, turmaFilter, planoFilter, growthFilter, igFilter, sort, isMentor, userTurma, dateFrom, dateTo])
+
+  const igIssueCount = useMemo(
+    () => mentorados.filter((m) => m.ig_issue && (!isMentor || !userTurma || m.turma === userTurma)).length,
+    [mentorados, isMentor, userTurma]
+  )
 
   return (
     <div>
@@ -127,6 +136,13 @@ export default function Dashboard() {
         )}
       </div>
 
+      {igIssueCount > 0 && igFilter !== 'issue' && !isMentor && (
+        <div className="mb-4 flex items-center justify-between gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+          <span>⚠️ {igIssueCount} {igIssueCount === 1 ? 'perfil com problema no Instagram' : 'perfis com problema no Instagram'} (não encontrado ou privado/restrito).</span>
+          <button onClick={() => setIgFilter('issue')} className="font-medium underline hover:text-amber-900 whitespace-nowrap">Ver quais</button>
+        </div>
+      )}
+
       <StatsCards mentorados={filtered} />
 
       <Filters
@@ -134,6 +150,7 @@ export default function Dashboard() {
         turmaFilter={turmaFilter}
         planoFilter={planoFilter}
         growthFilter={growthFilter}
+        igFilter={igFilter}
         sort={sort}
         turmas={turmas}
         dateFrom={dateFrom}
@@ -142,6 +159,7 @@ export default function Dashboard() {
         onTurmaChange={setTurmaFilter}
         onPlanoChange={setPlanoFilter}
         onGrowthChange={setGrowthFilter}
+        onIgFilterChange={setIgFilter}
         onSortChange={setSort}
         onRefresh={fetchMentorados}
         onDateFromChange={setDateFrom}

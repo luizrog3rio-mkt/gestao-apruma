@@ -39,6 +39,14 @@ function AvatarImg({ m, lastUpdate }: { m: Mentorado; lastUpdate?: string | null
   )
 }
 
+function IgIssueBadge({ issue }: { issue: string | null }) {
+  if (!issue) return null
+  const title = issue === 'restricted'
+    ? 'Instagram privado/restrito — o sistema não consegue puxar os dados automaticamente'
+    : 'Instagram não encontrado — a conta pode ter mudado de @ ou sido removida. Confira o @.'
+  return <span title={title} className="text-amber-500 cursor-help">⚠️</span>
+}
+
 function MobileCard({ m, onEdit, lastUpdate }: { m: Mentorado; onEdit?: (m: Mentorado) => void; lastUpdate?: string | null }) {
   const gained = m.seguidores_atual - m.seguidores_inicial
   const tempo = calcTempoRestante(m.data_inicio, m.plano)
@@ -54,7 +62,7 @@ function MobileCard({ m, onEdit, lastUpdate }: { m: Mentorado; onEdit?: (m: Ment
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-medium text-gray-900 truncate">{m.nome}</div>
-          <div className="text-gray-400 text-xs">@{m.instagram}</div>
+          <div className="text-gray-400 text-xs flex items-center gap-1">@{m.instagram}<IgIssueBadge issue={m.ig_issue} /></div>
         </div>
         {onEdit && (
           <button
@@ -158,7 +166,7 @@ export default function MentoradosTable({ mentorados, onEdit, lastUpdate }: Prop
                         </div>
                         <div>
                           <div className="font-medium text-gray-900">{m.nome}</div>
-                          <div className="text-gray-400 text-xs">@{m.instagram}</div>
+                          <div className="text-gray-400 text-xs flex items-center gap-1">@{m.instagram}<IgIssueBadge issue={m.ig_issue} /></div>
                         </div>
                       </div>
                     </td>
