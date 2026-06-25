@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { authedFetch } from '@/lib/api-client'
 import { useUserRole } from '@/lib/useUserRole'
+import { CAPABILITIES } from '@/lib/permissions'
 
 type UsuarioSistema = {
   id: string
@@ -10,6 +11,7 @@ type UsuarioSistema = {
   nome: string
   role: 'admin' | 'gerente' | 'mentor' | null
   turma: string | null
+  caps: string[]
   created_at: string
   last_sign_in_at: string | null
 }
@@ -39,6 +41,109 @@ function avatarUrl(nome: string) {
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(label)}&background=E8DEF8&color=6B21A8&size=96`
 }
 
+function Switch({ on, onClick, disabled, label }: { on: boolean; onClick: () => void; disabled?: boolean; label?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      className={`relative w-11 h-6 rounded-full transition-colors shrink-0 disabled:opacity-50 ${on ? 'bg-brand-600' : 'bg-gray-200'}`}
+    >
+      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${on ? 'translate-x-5' : ''}`} />
+    </button>
+  )
+}
+
+// Botão de gerenciar capacidades por usuário (admin = acesso total; sem papel = bloqueado).
+function CapsCell({ u, onManage }: { u: UsuarioSistema; onManage: () => void }) {
+  if (u.role === 'admin') return <span className="text-xs text-gray-400">Acesso total</span>
+  if (!u.role) return <span className="text-xs text-gray-300" title="Defina um papel primeiro">—</span>
+  return (
+    <button
+      onClick={onManage}
+      className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-800"
+    >
+      ⚙️ {u.caps.length > 0 ? `${u.caps.length} extra${u.caps.length > 1 ? 's' : ''}` : 'Gerenciar'}
+    </button>
+  )
+}
+
+function PermsModal({
+  user,
+  onClose,
+  onChange,
+}: {
+  user: UsuarioSistema
+  onClose: () => void
+  onChange: (caps: string[]) => void
+}) {
+  const [caps, setCaps] = useState<string[]>(user.caps)
+  const [saving, setSaving] = useState<string | null>(null)
+  const [erro, setErro] = useState('')
+
+  const toggle = async (capId: string) => {
+    const on = caps.includes(capId)
+    const novas = on ? caps.filter((c) => c !== capId) : [...caps, capId]
+    setSaving(capId)
+    setErro('')
+    try {
+      const res = await authedFetch('/api/usuarios', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, caps: novas }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        setErro(j.error || 'Não foi possível salvar.')
+        return
+      }
+      setCaps(novas)
+      onChange(novas)
+    } catch {
+      setErro('Não foi possível salvar.')
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 animate-scale-in" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-gray-900">Permissões</h2>
+            <p className="text-sm text-gray-500 mt-0.5 truncate">{user.nome || user.email}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl shrink-0 ml-3">&times;</button>
+        </div>
+        <div className="p-6 space-y-3 max-h-[60vh] overflow-y-auto">
+          <p className="text-xs text-gray-500">
+            Capacidades concedidas a esta pessoa além do papel <span className="font-medium capitalize">{user.role}</span>.
+          </p>
+          {CAPABILITIES.map((cap) => (
+            <div key={cap.id} className="flex items-start gap-3 p-3 rounded-xl border border-gray-100">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900">{cap.label}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{cap.descricao}</p>
+              </div>
+              <Switch on={caps.includes(cap.id)} disabled={saving !== null} onClick={() => toggle(cap.id)} label={cap.label} />
+            </div>
+          ))}
+          {erro && <p className="text-sm text-red-600">{erro}</p>}
+        </div>
+        <div className="flex justify-end p-6 border-t border-gray-100">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-xl transition-colors">
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function UsuariosPage() {
   const { role, loading: roleLoading } = useUserRole()
   const isAdmin = role === 'admin'
@@ -47,6 +152,7 @@ export default function UsuariosPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busca, setBusca] = useState('')
+  const [permsUser, setPermsUser] = useState<UsuarioSistema | null>(null)
 
   const fetchUsuarios = useCallback(async () => {
     setLoading(true)
@@ -94,6 +200,12 @@ export default function UsuariosPage() {
     )
   }, [usuarios, busca])
 
+  // Propaga a alteração de capacidades para a lista e para o modal aberto.
+  const handleCapsChange = useCallback((userId: string, novasCaps: string[]) => {
+    setUsuarios((prev) => prev.map((u) => (u.id === userId ? { ...u, caps: novasCaps } : u)))
+    setPermsUser((prev) => (prev && prev.id === userId ? { ...prev, caps: novasCaps } : prev))
+  }, [])
+
   // Enquanto a role não resolve, estado neutro — evita flash de "Carregando usuários" para não-admin.
   if (roleLoading) {
     return (
@@ -120,7 +232,7 @@ export default function UsuariosPage() {
       <div className="flex items-center justify-between mb-6 lg:mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Usuários</h1>
-          <p className="text-gray-500 text-sm mt-1">Acessos ao painel — administradores, gerentes e mentores</p>
+          <p className="text-gray-500 text-sm mt-1">Acessos ao painel — papéis e capacidades extras</p>
         </div>
         {!loading && !error && (
           <span className="text-sm text-gray-400 shrink-0">
@@ -171,6 +283,7 @@ export default function UsuariosPage() {
                 <th className="px-6 py-3">Usuário</th>
                 <th className="px-6 py-3">Papel</th>
                 <th className="px-6 py-3">Turma</th>
+                <th className="px-6 py-3">Capacidades</th>
                 <th className="px-6 py-3">Criado em</th>
                 <th className="px-6 py-3">Último acesso</th>
               </tr>
@@ -191,6 +304,7 @@ export default function UsuariosPage() {
                   </td>
                   <td className="px-6 py-3"><RoleTag role={u.role} /></td>
                   <td className="px-6 py-3 text-sm text-gray-600 whitespace-nowrap">{u.turma || '—'}</td>
+                  <td className="px-6 py-3"><CapsCell u={u} onManage={() => setPermsUser(u)} /></td>
                   <td className="px-6 py-3 text-sm text-gray-600">{fmtDate(u.created_at)}</td>
                   <td className="px-6 py-3 text-sm text-gray-600">{fmtDate(u.last_sign_in_at)}</td>
                 </tr>
@@ -215,10 +329,21 @@ export default function UsuariosPage() {
                     {u.turma ? `${u.turma} · ` : ''}último acesso {fmtDate(u.last_sign_in_at)}
                   </p>
                 </div>
+                <div className="shrink-0">
+                  <CapsCell u={u} onManage={() => setPermsUser(u)} />
+                </div>
               </div>
             ))}
           </div>
         </div>
+      )}
+
+      {permsUser && (
+        <PermsModal
+          user={permsUser}
+          onClose={() => setPermsUser(null)}
+          onChange={(caps) => handleCapsChange(permsUser.id, caps)}
+        />
       )}
     </div>
   )

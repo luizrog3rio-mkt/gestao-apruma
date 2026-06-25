@@ -28,9 +28,8 @@ export default function EditModal({ mentorado, onClose, onSave, onDelete, userRo
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
-  const isAdmin = userRole === 'admin'
   const canManageStatus = userRole === 'admin' || userRole === 'gerente'
-  const canEditSeguidores = isAdmin
+  const canEditSeguidores = pode('editar_seguidores', userRole, extraCaps)
   const canReativar = pode('reativar', userRole, extraCaps)
   const instagramChanged = form.instagram.replace('@', '').trim().toLowerCase() !== mentorado.instagram.replace('@', '').trim().toLowerCase()
 

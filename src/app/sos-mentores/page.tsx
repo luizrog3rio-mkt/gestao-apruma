@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase, type Mentorado } from '@/lib/supabase'
 import { useUserRole } from '@/lib/useUserRole'
+import { pode } from '@/lib/permissions'
 import { formatNumber } from '@/lib/utils'
 import AudioRecorder from '@/components/AudioRecorder'
 
@@ -105,13 +106,13 @@ function classifyMentorados(mentorados: Mentorado[]) {
 function MentoradoCard({
   m,
   level,
-  isAdmin,
+  canGravarToque,
   onAudioRecorded,
   uploading,
 }: {
   m: Mentorado
   level: Level
-  isAdmin: boolean
+  canGravarToque: boolean
   onAudioRecorded: (mentoradoId: string, blob: Blob, extension: string) => void
   uploading: string | null
 }) {
@@ -177,8 +178,8 @@ function MentoradoCard({
         </div>
       </div>
 
-      {/* Audio record button - admin only */}
-      {isAdmin && (
+      {/* Botão de gravar áudio — quem tem a capacidade gravar_toque */}
+      {canGravarToque && (
         <div className="mt-3 pt-3 border-t border-black/5 flex items-center gap-2">
           <AudioRecorder
             onRecorded={(blob, ext) => onAudioRecorded(m.id, blob, ext)}
@@ -198,9 +199,9 @@ export default function SosMentoresPage() {
   const [loading, setLoading] = useState(true)
   const [turmaFilter, setTurmaFilter] = useState('')
   const [uploading, setUploading] = useState<string | null>(null)
-  const { role, turma: userTurma, email, name } = useUserRole()
+  const { role, turma: userTurma, email, name, caps } = useUserRole()
   const isMentor = role === 'mentor'
-  const isAdmin = role === 'admin'
+  const canGravarToque = pode('gravar_toque', role, caps)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -331,7 +332,7 @@ export default function SosMentoresPage() {
                         key={m.id}
                         m={m}
                         level={level}
-                        isAdmin={isAdmin}
+                        canGravarToque={canGravarToque}
                         onAudioRecorded={handleAudioRecorded}
                         uploading={uploading}
                       />

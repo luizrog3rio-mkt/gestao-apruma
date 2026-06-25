@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getRequestRole } from '@/lib/api-auth'
+import { isCapability } from '@/lib/permissions'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -58,7 +59,7 @@ export async function GET(request: Request) {
 
     const { data: roles, error: rolesError } = await supabaseAdmin
       .from('user_roles')
-      .select('user_id, role, turma')
+      .select('user_id, role, turma, extra_caps')
     if (rolesError) {
       return NextResponse.json({ error: 'Falha ao carregar papéis' }, { status: 500 })
     }
@@ -73,6 +74,7 @@ export async function GET(request: Request) {
         nome: u.display_name,
         role: (r?.role as 'admin' | 'gerente' | 'mentor' | undefined) ?? null,
         turma: (r?.turma as string | null) ?? null,
+        caps: (r?.extra_caps as string[] | null) ?? [],
         created_at: u.created_at,
         last_sign_in_at: u.last_sign_in_at,
       }
@@ -91,4 +93,51 @@ export async function GET(request: Request) {
   } catch {
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
   }
+}
+
+// Atualiza as capacidades extras (extra_caps) de um usuário. Admin-only.
+export async function PATCH(request: Request) {
+  const auth = await getRequestRole(request)
+  if (!auth) {
+    return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  }
+  if (auth.role !== 'admin') {
+    return NextResponse.json({ error: 'Acesso restrito' }, { status: 403 })
+  }
+
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Corpo inválido' }, { status: 400 })
+  }
+
+  const { userId, caps } = (body ?? {}) as { userId?: unknown; caps?: unknown }
+  if (typeof userId !== 'string' || !Array.isArray(caps)) {
+    return NextResponse.json({ error: 'userId e caps são obrigatórios' }, { status: 400 })
+  }
+
+  // Só aceita capacidades do catálogo — bloqueia injeção de valores arbitrários.
+  if (!caps.every((c) => typeof c === 'string' && isCapability(c))) {
+    return NextResponse.json({ error: 'Capacidade inválida' }, { status: 400 })
+  }
+  const clean = Array.from(new Set(caps as string[]))
+
+  const { data, error } = await supabaseAdmin
+    .from('user_roles')
+    .update({ extra_caps: clean })
+    .eq('user_id', userId)
+    .select('user_id')
+
+  if (error) {
+    return NextResponse.json({ error: 'Falha ao salvar' }, { status: 500 })
+  }
+  if (!data || data.length === 0) {
+    return NextResponse.json(
+      { error: 'Usuário sem papel definido — defina um papel antes de conceder capacidades.' },
+      { status: 404 }
+    )
+  }
+
+  return NextResponse.json({ ok: true, caps: clean })
 }

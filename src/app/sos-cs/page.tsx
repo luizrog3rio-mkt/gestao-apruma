@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase, type Mentorado } from '@/lib/supabase'
 import { useUserRole } from '@/lib/useUserRole'
+import { pode } from '@/lib/permissions'
 import { formatNumber } from '@/lib/utils'
 
 type Level = {
@@ -148,6 +149,7 @@ function MentoradoCard({
   onToggle,
   needsBell,
   userRole,
+  canMarcarRafa,
 }: {
   m: Mentorado
   level: Level
@@ -155,6 +157,7 @@ function MentoradoCard({
   onToggle: (mentoradoId: string, boxIndex: number, source: string) => void
   needsBell: boolean
   userRole: string
+  canMarcarRafa: boolean
 }) {
   const gained = m.seguidores_atual - m.seguidores_inicial
 
@@ -237,7 +240,7 @@ function MentoradoCard({
           <AbordagemBoxes
             mentoradoId={m.id}
             abordagens={abordagens}
-            onToggle={userRole === 'admin' ? onToggle : undefined}
+            onToggle={canMarcarRafa ? onToggle : undefined}
             source="rafa"
           />
         </div>
@@ -252,7 +255,8 @@ export default function SosCsPage() {
   const [loading, setLoading] = useState(true)
   const [turmaFilter, setTurmaFilter] = useState('')
   const [currentUser, setCurrentUser] = useState<{ email: string; name: string }>({ email: '', name: '' })
-  const { role } = useUserRole()
+  const { role, caps } = useUserRole()
+  const canMarcarRafa = pode('marcar_abordagem_rafa', role, caps)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -424,7 +428,7 @@ export default function SosCsPage() {
                 ) : (
                   <div className="space-y-2">
                     {list.map((m) => (
-                      <MentoradoCard key={m.id} m={m} level={level} abordagens={abordagens} onToggle={handleToggle} needsBell={needsBellSet.has(m.id)} userRole={role} />
+                      <MentoradoCard key={m.id} m={m} level={level} abordagens={abordagens} onToggle={handleToggle} needsBell={needsBellSet.has(m.id)} userRole={role} canMarcarRafa={canMarcarRafa} />
                     ))}
                   </div>
                 )}
