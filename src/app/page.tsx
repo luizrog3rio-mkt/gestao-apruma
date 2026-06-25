@@ -25,7 +25,7 @@ export default function Dashboard() {
   const [sort, setSort] = useState('nome')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const { role, turma: userTurma } = useUserRole()
+  const { role, turma: userTurma, caps } = useUserRole()
   const isAdmin = role === 'admin'
   const isMentor = role === 'mentor'
 
@@ -187,6 +187,7 @@ export default function Dashboard() {
           onSave={() => { setEditing(null); fetchMentorados() }}
           onDelete={() => { setEditing(null); fetchMentorados() }}
           userRole={role}
+          extraCaps={caps}
         />
       )}
     </div>

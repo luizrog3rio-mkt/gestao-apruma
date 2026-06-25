@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { supabase, type Mentorado } from '@/lib/supabase'
 import { authedFetch } from '@/lib/api-client'
 import type { UserRole } from '@/lib/useUserRole'
+import { pode } from '@/lib/permissions'
 
 type Props = {
   mentorado: Mentorado
@@ -11,9 +12,10 @@ type Props = {
   onSave: () => void
   onDelete: () => void
   userRole?: UserRole
+  extraCaps?: string[]
 }
 
-export default function EditModal({ mentorado, onClose, onSave, onDelete, userRole = 'admin' }: Props) {
+export default function EditModal({ mentorado, onClose, onSave, onDelete, userRole = 'admin', extraCaps = [] }: Props) {
   const [form, setForm] = useState({
     nome: mentorado.nome,
     instagram: mentorado.instagram,
@@ -29,6 +31,7 @@ export default function EditModal({ mentorado, onClose, onSave, onDelete, userRo
   const isAdmin = userRole === 'admin'
   const canManageStatus = userRole === 'admin' || userRole === 'gerente'
   const canEditSeguidores = isAdmin
+  const canReativar = pode('reativar', userRole, extraCaps)
   const instagramChanged = form.instagram.replace('@', '').trim().toLowerCase() !== mentorado.instagram.replace('@', '').trim().toLowerCase()
 
   const handleChange = (field: string, value: string | number) => {
@@ -214,7 +217,7 @@ export default function EditModal({ mentorado, onClose, onSave, onDelete, userRo
                   em {new Date(mentorado.status_at).toLocaleDateString('pt-BR')}
                 </span>
               )}
-              {isAdmin && (
+              {canReativar && (
                 <button
                   onClick={async () => {
                     if (!confirm('Reativar este mentorado (voltar para Ativo)?')) return

@@ -11,6 +11,7 @@ type UserRoleData = {
   loading: boolean
   email: string
   name: string
+  caps: string[]
 }
 
 export function useUserRole(): UserRoleData {
@@ -20,6 +21,7 @@ export function useUserRole(): UserRoleData {
     loading: true,
     email: '',
     name: '',
+    caps: [],
   })
 
   useEffect(() => {
@@ -32,7 +34,7 @@ export function useUserRole(): UserRoleData {
 
       const { data: roleData } = await supabase
         .from('user_roles')
-        .select('role, turma')
+        .select('role, turma, extra_caps')
         .eq('user_id', user.id)
         .single()
 
@@ -42,6 +44,7 @@ export function useUserRole(): UserRoleData {
         loading: false,
         email: user.email || '',
         name: user.user_metadata?.display_name || '',
+        caps: (roleData?.extra_caps as string[] | null) || [],
       })
     }
 
