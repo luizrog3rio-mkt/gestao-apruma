@@ -190,7 +190,7 @@ export default function UsuariosPage() {
                     </div>
                   </td>
                   <td className="px-6 py-3"><RoleTag role={u.role} /></td>
-                  <td className="px-6 py-3 text-sm text-gray-600">{u.turma || '—'}</td>
+                  <td className="px-6 py-3 text-sm text-gray-600 whitespace-nowrap">{u.turma || '—'}</td>
                   <td className="px-6 py-3 text-sm text-gray-600">{fmtDate(u.created_at)}</td>
                   <td className="px-6 py-3 text-sm text-gray-600">{fmtDate(u.last_sign_in_at)}</td>
                 </tr>

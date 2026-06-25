@@ -172,7 +172,7 @@ export default function MentoradosTable({ mentorados, onEdit, lastUpdate }: Prop
                     </td>
                     <td className="px-4 py-4 text-gray-600">{m.nicho}</td>
                     <td className="px-4 py-4">
-                      <span className="bg-brand-50 text-brand-700 text-xs font-medium px-2 py-1 rounded-lg">
+                      <span className="inline-block whitespace-nowrap bg-brand-50 text-brand-700 text-xs font-medium px-2 py-1 rounded-lg">
                         {m.turma}
                       </span>
                     </td>
