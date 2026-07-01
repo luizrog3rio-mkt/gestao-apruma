@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { supabase, type Mentorado } from '@/lib/supabase'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { supabase, fetchAll, type Mentorado } from '@/lib/supabase'
 import { useUserRole } from '@/lib/useUserRole'
 import { pode } from '@/lib/permissions'
 import { formatNumber } from '@/lib/utils'
@@ -258,22 +258,38 @@ export default function SosCsPage() {
   const { role, caps } = useUserRole()
   const canMarcarRafa = pode('marcar_abordagem_rafa', role, caps)
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    const [mentRes, abrRes, userRes] = await Promise.all([
-      supabase.from('mentorados').select('*').order('nome'),
-      supabase.from('sos_abordagens').select('mentorado_id, box_index, marked_at, marked_by_email, marked_by_name, source'),
-      supabase.auth.getUser(),
-    ])
-    setMentorados(mentRes.data || [])
-    setAbordagens(abrRes.data || [])
-    if (userRes.data.user) {
-      setCurrentUser({
-        email: userRes.data.user.email || '',
-        name: userRes.data.user.user_metadata?.display_name || '',
-      })
+  const fetchSeq = useRef(0)
+
+  const fetchData = useCallback(async (opts?: { silent?: boolean }) => {
+    const seq = ++fetchSeq.current
+    if (!opts?.silent) setLoading(true)
+    try {
+      const [mentRes, abrData, userRes] = await Promise.all([
+        supabase.from('mentorados').select('*').order('nome'),
+        fetchAll<Abordagem>((from, to) =>
+          supabase
+            .from('sos_abordagens')
+            .select('mentorado_id, box_index, marked_at, marked_by_email, marked_by_name, source')
+            .order('id')
+            .range(from, to)
+        ),
+        supabase.auth.getUser(),
+      ])
+      // Um fetch mais novo já está em voo — descarta este resultado obsoleto
+      if (seq !== fetchSeq.current) return
+      setMentorados(mentRes.data || [])
+      setAbordagens(abrData)
+      if (userRes.data.user) {
+        setCurrentUser({
+          email: userRes.data.user.email || '',
+          name: userRes.data.user.user_metadata?.display_name || '',
+        })
+      }
+    } catch {
+      // Falha de rede no meio da busca — mantém o estado anterior na tela
+    } finally {
+      if (seq === fetchSeq.current) setLoading(false)
     }
-    setLoading(false)
   }, [])
 
   useEffect(() => {
@@ -286,12 +302,20 @@ export default function SosCsPage() {
     )
 
     if (existing) {
-      await supabase
+      const { data: deleted, error } = await supabase
         .from('sos_abordagens')
         .delete()
         .eq('mentorado_id', mentoradoId)
         .eq('box_index', boxIndex)
         .eq('source', source)
+        .select('mentorado_id')
+
+      // RLS pode filtrar o delete e devolver "sucesso" com 0 linhas afetadas —
+      // trata como falha pra não desmarcar na tela algo que continua no banco
+      if (error || !deleted || deleted.length === 0) {
+        fetchData({ silent: true })
+        return
+      }
 
       setAbordagens((prev) =>
         prev.filter((a) => !(a.mentorado_id === mentoradoId && a.box_index === boxIndex && a.source === source))
@@ -309,21 +333,25 @@ export default function SosCsPage() {
           source,
         })
 
-      if (!error) {
-        setAbordagens((prev) => [
-          ...prev,
-          {
-            mentorado_id: mentoradoId,
-            box_index: boxIndex,
-            marked_at: now,
-            marked_by_email: currentUser.email,
-            marked_by_name: currentUser.name,
-            source,
-          },
-        ])
+      if (error) {
+        // Estado local desatualizado (ex.: marcação já existia no banco) — ressincroniza
+        fetchData({ silent: true })
+        return
       }
+
+      setAbordagens((prev) => [
+        ...prev,
+        {
+          mentorado_id: mentoradoId,
+          box_index: boxIndex,
+          marked_at: now,
+          marked_by_email: currentUser.email,
+          marked_by_name: currentUser.name,
+          source,
+        },
+      ])
     }
-  }, [abordagens, currentUser])
+  }, [abordagens, currentUser, fetchData])
 
   const turmas = useMemo(() => [...new Set(mentorados.map((m) => m.turma))].sort(), [mentorados])
 

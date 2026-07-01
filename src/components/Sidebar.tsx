@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase, fetchAll } from '@/lib/supabase'
 import { useUserRole, type UserRole } from '@/lib/useUserRole'
 
 const allNavItems = [
@@ -39,14 +39,24 @@ function useSosCsBells(role: UserRole) {
       if (sosCsIds.length === 0) { setCount(0); return }
 
       // Get abordagens for the relevant source
-      const { data: abordagens } = await supabase
-        .from('sos_abordagens')
-        .select('mentorado_id, marked_at')
-        .eq('source', bellSource)
+      let abordagens: { mentorado_id: string; marked_at: string }[]
+      try {
+        abordagens = await fetchAll((from, to) =>
+          supabase
+            .from('sos_abordagens')
+            .select('mentorado_id, marked_at')
+            .eq('source', bellSource)
+            .order('id')
+            .range(from, to)
+        )
+      } catch {
+        // Falha de rede — mantém a contagem anterior até o próximo poll
+        return
+      }
 
       let bellCount = 0
       for (const id of sosCsIds) {
-        const contacts = (abordagens || [])
+        const contacts = abordagens
           .filter((a) => a.mentorado_id === id)
           .map((a) => new Date(a.marked_at).getTime())
         const lastContact = contacts.length > 0 ? Math.max(...contacts) : 0
