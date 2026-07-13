@@ -21,6 +21,7 @@ export default function Dashboard() {
   const [turmaFilter, setTurmaFilter] = useState('')
   const [planoFilter, setPlanoFilter] = useState('')
   const [growthFilter, setGrowthFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
   const [igFilter, setIgFilter] = useState('')
   const [sort, setSort] = useState('nome')
   const [dateFrom, setDateFrom] = useState('')
@@ -83,6 +84,7 @@ export default function Dashboard() {
           if (growthFilter === '10k' && (gained < 10000 || gained >= 30000)) return false
           if (growthFilter === 'under10k' && gained >= 10000) return false
         }
+        if (statusFilter && m.status !== statusFilter) return false
         if (igFilter === 'issue' && !m.ig_issue) return false
         if (igFilter === 'not_found' && m.ig_issue !== 'not_found') return false
         if (igFilter === 'restricted' && m.ig_issue !== 'restricted') return false
@@ -97,7 +99,20 @@ export default function Dashboard() {
           default: return 0
         }
       })
-  }, [mentorados, search, turmaFilter, planoFilter, growthFilter, igFilter, sort, isMentor, userTurma, dateFrom, dateTo])
+  }, [mentorados, search, turmaFilter, planoFilter, growthFilter, statusFilter, igFilter, sort, isMentor, userTurma, dateFrom, dateTo])
+
+  const handleGrowthCardClick = useCallback((value: string) => {
+    setGrowthFilter((prev) => (prev === value ? '' : value))
+  }, [])
+
+  const handleStatusCardClick = useCallback((value: string) => {
+    setStatusFilter((prev) => (prev === value ? '' : value))
+  }, [])
+
+  const handleTotalCardClick = useCallback(() => {
+    setGrowthFilter('')
+    setStatusFilter('')
+  }, [])
 
   const igIssueCount = useMemo(
     () => mentorados.filter((m) => m.ig_issue && (!isMentor || !userTurma || m.turma === userTurma)).length,
@@ -143,13 +158,21 @@ export default function Dashboard() {
         </div>
       )}
 
-      <StatsCards mentorados={filtered} />
+      <StatsCards
+        mentorados={filtered}
+        growthFilter={growthFilter}
+        statusFilter={statusFilter}
+        onGrowthClick={handleGrowthCardClick}
+        onStatusClick={handleStatusCardClick}
+        onTotalClick={handleTotalCardClick}
+      />
 
       <Filters
         search={search}
         turmaFilter={turmaFilter}
         planoFilter={planoFilter}
         growthFilter={growthFilter}
+        statusFilter={statusFilter}
         igFilter={igFilter}
         sort={sort}
         turmas={turmas}
@@ -159,6 +182,7 @@ export default function Dashboard() {
         onTurmaChange={setTurmaFilter}
         onPlanoChange={setPlanoFilter}
         onGrowthChange={setGrowthFilter}
+        onStatusFilterChange={setStatusFilter}
         onIgFilterChange={setIgFilter}
         onSortChange={setSort}
         onRefresh={fetchMentorados}

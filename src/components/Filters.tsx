@@ -7,6 +7,7 @@ type Props = {
   turmaFilter: string
   planoFilter: string
   growthFilter: string
+  statusFilter: string
   igFilter: string
   sort: string
   turmas: string[]
@@ -16,6 +17,7 @@ type Props = {
   onTurmaChange: (v: string) => void
   onPlanoChange: (v: string) => void
   onGrowthChange: (v: string) => void
+  onStatusFilterChange: (v: string) => void
   onIgFilterChange: (v: string) => void
   onSortChange: (v: string) => void
   onRefresh: () => void
@@ -172,9 +174,9 @@ function DateFilter({
 }
 
 export default function Filters({
-  search, turmaFilter, planoFilter, growthFilter, igFilter, sort, turmas,
+  search, turmaFilter, planoFilter, growthFilter, statusFilter, igFilter, sort, turmas,
   dateFrom, dateTo,
-  onSearchChange, onTurmaChange, onPlanoChange, onGrowthChange, onIgFilterChange, onSortChange, onRefresh,
+  onSearchChange, onTurmaChange, onPlanoChange, onGrowthChange, onStatusFilterChange, onIgFilterChange, onSortChange, onRefresh,
   onDateFromChange, onDateToChange,
   hideTurmaFilter,
 }: Props) {
@@ -208,6 +210,14 @@ export default function Filters({
           <option value="">Todos os planos</option>
           <option value="6">6 meses</option>
           <option value="12">12 meses</option>
+        </select>
+        <select value={statusFilter} onChange={(e) => onStatusFilterChange(e.target.value)} className={selectClass}>
+          <option value="">Todos os status</option>
+          <option value="ativo">✅ Ativos</option>
+          <option value="cancelou">❌ Cancelou</option>
+          <option value="pausou">⏸️ Pausou</option>
+          <option value="finalizou">🏁 Finalizou</option>
+          <option value="reembolsado">💸 Reembolsou</option>
         </select>
         <select value={growthFilter} onChange={(e) => onGrowthChange(e.target.value)} className={selectClass}>
           <option value="">Todos os ganhos</option>
