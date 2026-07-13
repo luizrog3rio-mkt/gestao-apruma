@@ -102,11 +102,23 @@ export default function Dashboard() {
   }, [mentorados, search, turmaFilter, planoFilter, growthFilter, statusFilter, igFilter, sort, isMentor, userTurma, dateFrom, dateTo])
 
   const handleGrowthCardClick = useCallback((value: string) => {
+    setStatusFilter('')
     setGrowthFilter((prev) => (prev === value ? '' : value))
   }, [])
 
   const handleStatusCardClick = useCallback((value: string) => {
+    setGrowthFilter('')
     setStatusFilter((prev) => (prev === value ? '' : value))
+  }, [])
+
+  const handleGrowthSelect = useCallback((value: string) => {
+    setStatusFilter('')
+    setGrowthFilter(value)
+  }, [])
+
+  const handleStatusSelect = useCallback((value: string) => {
+    setGrowthFilter('')
+    setStatusFilter(value)
   }, [])
 
   const handleTotalCardClick = useCallback(() => {
@@ -181,8 +193,8 @@ export default function Dashboard() {
         onSearchChange={setSearch}
         onTurmaChange={setTurmaFilter}
         onPlanoChange={setPlanoFilter}
-        onGrowthChange={setGrowthFilter}
-        onStatusFilterChange={setStatusFilter}
+        onGrowthChange={handleGrowthSelect}
+        onStatusFilterChange={handleStatusSelect}
         onIgFilterChange={setIgFilter}
         onSortChange={setSort}
         onRefresh={fetchMentorados}
