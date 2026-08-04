@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { authedFetch } from '@/lib/api-client'
 import type { InstagramProfile } from '@/lib/instagram'
 import InstagramPreview from '@/components/InstagramPreview'
+import { TURMAS } from '@/lib/turmas'
 
 export default function CadastrarPage() {
   const router = useRouter()
@@ -173,10 +174,9 @@ export default function CadastrarPage() {
           <div>
             <label className={labelClass}>Turma</label>
             <select className={inputClass} value={form.turma} onChange={(e) => handleChange('turma', e.target.value)}>
-              <option value="Turma 1 - Rafa">Turma 1 - Rafa</option>
-              <option value="Turma 2 - Rafa">Turma 2 - Rafa</option>
-              <option value="Turma 3 - Carlos">Turma 3 - Carlos</option>
-              <option value="Turma 4 - Ivens">Turma 4 - Ivens</option>
+              {TURMAS.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
             </select>
           </div>
           <div>

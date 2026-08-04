@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getRequestRole } from '@/lib/api-auth'
 import { isCapability } from '@/lib/permissions'
+import { TURMAS } from '@/lib/turmas'
+
+const ROLES = ['admin', 'gerente', 'mentor'] as const
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -116,9 +119,58 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Corpo inválido' }, { status: 400 })
   }
 
-  const { userId, caps, active } = (body ?? {}) as { userId?: unknown; caps?: unknown; active?: unknown }
+  const { userId, caps, active, nome, role: novoRole, turma } = (body ?? {}) as {
+    userId?: unknown
+    caps?: unknown
+    active?: unknown
+    nome?: unknown
+    role?: unknown
+    turma?: unknown
+  }
   if (typeof userId !== 'string') {
     return NextResponse.json({ error: 'userId é obrigatório' }, { status: 400 })
+  }
+
+  if (nome !== undefined || novoRole !== undefined || turma !== undefined) {
+    if (nome !== undefined && typeof nome !== 'string') {
+      return NextResponse.json({ error: 'nome inválido' }, { status: 400 })
+    }
+    if (novoRole !== undefined && !ROLES.includes(novoRole as (typeof ROLES)[number])) {
+      return NextResponse.json({ error: 'role inválida' }, { status: 400 })
+    }
+    if (turma !== undefined && turma !== null && !TURMAS.includes(turma as (typeof TURMAS)[number])) {
+      return NextResponse.json({ error: 'turma inválida' }, { status: 400 })
+    }
+    if (userId === auth.userId && novoRole !== undefined && novoRole !== 'admin') {
+      return NextResponse.json({ error: 'Você não pode remover seu próprio papel de admin.' }, { status: 400 })
+    }
+
+    if (nome !== undefined) {
+      const { data: userData, error: getErr } = await supabaseAdmin.auth.admin.getUserById(userId)
+      if (getErr || !userData.user) {
+        return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+      }
+      const { error: metaErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+        user_metadata: { ...userData.user.user_metadata, display_name: (nome as string).trim() },
+      })
+      if (metaErr) {
+        return NextResponse.json({ error: 'Falha ao salvar nome' }, { status: 500 })
+      }
+    }
+
+    if (novoRole !== undefined || turma !== undefined) {
+      // Upsert parcial: só as colunas presentes no payload são tocadas (cria a
+      // linha em user_roles com defaults se o usuário ainda não tinha papel).
+      const patch: { user_id: string; role?: string; turma?: string | null } = { user_id: userId }
+      if (novoRole !== undefined) patch.role = novoRole as string
+      if (turma !== undefined) patch.turma = turma as string | null
+      const { error: roleErr } = await supabaseAdmin.from('user_roles').upsert(patch, { onConflict: 'user_id' })
+      if (roleErr) {
+        return NextResponse.json({ error: 'Falha ao salvar papel/turma' }, { status: 500 })
+      }
+    }
+
+    return NextResponse.json({ ok: true })
   }
 
   if (active !== undefined) {

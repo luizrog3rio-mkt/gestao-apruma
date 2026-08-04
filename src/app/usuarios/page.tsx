@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { authedFetch } from '@/lib/api-client'
 import { useUserRole } from '@/lib/useUserRole'
 import { CAPABILITIES } from '@/lib/permissions'
+import { TURMAS } from '@/lib/turmas'
 
 type UsuarioSistema = {
   id: string
@@ -192,6 +193,125 @@ function PermsModal({
   )
 }
 
+type UsuarioPatch = { nome?: string; role?: 'admin' | 'gerente' | 'mentor'; turma?: string | null }
+
+function EditUserModal({
+  user,
+  isSelf,
+  onClose,
+  onSaved,
+}: {
+  user: UsuarioSistema
+  isSelf: boolean
+  onClose: () => void
+  onSaved: (patch: UsuarioPatch) => void
+}) {
+  const [nome, setNome] = useState(user.nome)
+  const [role, setRole] = useState<'admin' | 'gerente' | 'mentor' | ''>(user.role ?? '')
+  const [turma, setTurma] = useState(user.turma ?? '')
+  const [saving, setSaving] = useState(false)
+  const [erro, setErro] = useState('')
+
+  const handleSave = async () => {
+    const patch: UsuarioPatch = {}
+    if (nome.trim() !== user.nome) patch.nome = nome.trim()
+    if (!isSelf && role && role !== user.role) patch.role = role
+    if (turma !== (user.turma ?? '')) patch.turma = turma || null
+    if (Object.keys(patch).length === 0) {
+      onClose()
+      return
+    }
+
+    setSaving(true)
+    setErro('')
+    try {
+      const res = await authedFetch('/api/usuarios', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, ...patch }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        setErro(j.error || 'Não foi possível salvar.')
+        return
+      }
+      onSaved(patch)
+    } catch {
+      setErro('Não foi possível salvar.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 animate-scale-in" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-gray-900">Editar usuário</h2>
+            <p className="text-sm text-gray-500 mt-0.5 truncate">{user.email}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl shrink-0 ml-3">&times;</button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Nome</label>
+            <input
+              type="text"
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-300 focus:border-brand-300 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Papel</label>
+            {isSelf ? (
+              <p className="text-sm text-gray-500">Não é possível alterar seu próprio papel por aqui.</p>
+            ) : (
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as 'admin' | 'gerente' | 'mentor')}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-300 focus:border-brand-300 outline-none"
+              >
+                <option value="" disabled>Selecione...</option>
+                <option value="admin">Admin</option>
+                <option value="gerente">Gerente</option>
+                <option value="mentor">Mentor</option>
+              </select>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Turma</label>
+            <select
+              value={turma}
+              onChange={(e) => setTurma(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-300 focus:border-brand-300 outline-none"
+            >
+              <option value="">— sem turma —</option>
+              {TURMAS.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+          {erro && <p className="text-sm text-red-600">{erro}</p>}
+        </div>
+        <div className="flex justify-end gap-2 p-6 border-t border-gray-100">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-xl transition-colors">
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors disabled:opacity-50"
+          >
+            {saving ? 'Salvando...' : 'Salvar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function UsuariosPage() {
   const { role, email: meuEmail, loading: roleLoading } = useUserRole()
   const isAdmin = role === 'admin'
@@ -201,6 +321,7 @@ export default function UsuariosPage() {
   const [error, setError] = useState('')
   const [busca, setBusca] = useState('')
   const [permsUser, setPermsUser] = useState<UsuarioSistema | null>(null)
+  const [editUser, setEditUser] = useState<UsuarioSistema | null>(null)
 
   const fetchUsuarios = useCallback(async () => {
     setLoading(true)
@@ -266,6 +387,11 @@ export default function UsuariosPage() {
       return
     }
     setUsuarios((prev) => prev.map((x) => (x.id === u.id ? { ...x, ativo: !u.ativo } : x)))
+  }, [])
+
+  const handleUserSaved = useCallback((userId: string, patch: UsuarioPatch) => {
+    setUsuarios((prev) => prev.map((u) => (u.id === userId ? { ...u, ...patch } : u)))
+    setEditUser(null)
   }, [])
 
   // Enquanto a role não resolve, estado neutro — evita flash de "Carregando usuários" para não-admin.
@@ -364,6 +490,13 @@ export default function UsuariosPage() {
                         <p className="text-sm font-medium text-gray-900 truncate">{u.nome || '—'}</p>
                         <p className="text-xs text-gray-500 truncate">{u.email}</p>
                       </div>
+                      <button
+                        onClick={() => setEditUser(u)}
+                        className="text-xs font-medium text-gray-400 hover:text-brand-600 shrink-0"
+                        title="Editar usuário"
+                      >
+                        ✏️
+                      </button>
                     </div>
                   </td>
                   <td className="px-6 py-3"><RoleTag role={u.role} /></td>
@@ -392,6 +525,13 @@ export default function UsuariosPage() {
                     <p className="text-sm font-medium text-gray-900 truncate">{u.nome || u.email}</p>
                     <RoleTag role={u.role} />
                     <AtivoTag ativo={u.ativo} />
+                    <button
+                      onClick={() => setEditUser(u)}
+                      className="text-xs font-medium text-gray-400 hover:text-brand-600 shrink-0"
+                      title="Editar usuário"
+                    >
+                      ✏️
+                    </button>
                   </div>
                   <p className="text-xs text-gray-500 truncate">{u.email}</p>
                   <p className="text-xs text-gray-400 mt-0.5">
@@ -413,6 +553,15 @@ export default function UsuariosPage() {
           user={permsUser}
           onClose={() => setPermsUser(null)}
           onChange={(caps) => handleCapsChange(permsUser.id, caps)}
+        />
+      )}
+
+      {editUser && (
+        <EditUserModal
+          user={editUser}
+          isSelf={editUser.email === meuEmail}
+          onClose={() => setEditUser(null)}
+          onSaved={(patch) => handleUserSaved(editUser.id, patch)}
         />
       )}
     </div>
