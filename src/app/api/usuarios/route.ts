@@ -31,6 +31,7 @@ export async function GET(request: Request) {
       created_at: string
       last_sign_in_at: string | null
       display_name: string
+      ativo: boolean
     }[] = []
     const perPage = 200
     const MAX_PAGES = 100 // teto de segurança contra loop (até ~20k usuários)
@@ -48,6 +49,8 @@ export async function GET(request: Request) {
           created_at: u.created_at,
           last_sign_in_at: u.last_sign_in_at ?? null,
           display_name: (u.user_metadata?.display_name as string) || '',
+          // banned_until vem preenchido (data futura) quando o acesso foi desativado manualmente.
+          ativo: !u.banned_until || new Date(u.banned_until).getTime() <= Date.now(),
         })
       }
       // Atingiu o teto com a página ainda cheia: pode haver mais além do limite.
@@ -77,6 +80,7 @@ export async function GET(request: Request) {
         caps: (r?.extra_caps as string[] | null) ?? [],
         created_at: u.created_at,
         last_sign_in_at: u.last_sign_in_at,
+        ativo: u.ativo,
       }
     })
 
@@ -112,9 +116,31 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Corpo inválido' }, { status: 400 })
   }
 
-  const { userId, caps } = (body ?? {}) as { userId?: unknown; caps?: unknown }
-  if (typeof userId !== 'string' || !Array.isArray(caps)) {
-    return NextResponse.json({ error: 'userId e caps são obrigatórios' }, { status: 400 })
+  const { userId, caps, active } = (body ?? {}) as { userId?: unknown; caps?: unknown; active?: unknown }
+  if (typeof userId !== 'string') {
+    return NextResponse.json({ error: 'userId é obrigatório' }, { status: 400 })
+  }
+
+  if (active !== undefined) {
+    if (typeof active !== 'boolean') {
+      return NextResponse.json({ error: 'active deve ser booleano' }, { status: 400 })
+    }
+    if (userId === auth.userId) {
+      return NextResponse.json({ error: 'Você não pode desativar seu próprio acesso.' }, { status: 400 })
+    }
+
+    // Bane por ~100 anos (recomendação da doc do Supabase para ban indefinido) ou remove o ban.
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      ban_duration: active ? 'none' : '876000h',
+    })
+    if (error) {
+      return NextResponse.json({ error: 'Falha ao atualizar acesso' }, { status: 500 })
+    }
+    return NextResponse.json({ ok: true, ativo: active })
+  }
+
+  if (!Array.isArray(caps)) {
+    return NextResponse.json({ error: 'caps é obrigatório' }, { status: 400 })
   }
 
   // Só aceita capacidades do catálogo — bloqueia injeção de valores arbitrários.

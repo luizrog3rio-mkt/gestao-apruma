@@ -14,6 +14,7 @@ type UsuarioSistema = {
   caps: string[]
   created_at: string
   last_sign_in_at: string | null
+  ativo: boolean
 }
 
 const roleBadge: Record<string, { label: string; cls: string }> = {
@@ -28,6 +29,14 @@ function RoleTag({ role }: { role: string | null }) {
   }
   const b = roleBadge[role] || { label: role, cls: 'bg-gray-100 text-gray-600' }
   return <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${b.cls}`}>{b.label}</span>
+}
+
+function AtivoTag({ ativo }: { ativo: boolean }) {
+  return ativo ? (
+    <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-green-100 text-green-700">Ativo</span>
+  ) : (
+    <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-red-100 text-red-700">Desativado</span>
+  )
 }
 
 function fmtDate(iso: string | null) {
@@ -67,6 +76,45 @@ function CapsCell({ u, onManage }: { u: UsuarioSistema; onManage: () => void }) 
       className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-800"
     >
       ⚙️ {u.caps.length > 0 ? `${u.caps.length} extra${u.caps.length > 1 ? 's' : ''}` : 'Gerenciar'}
+    </button>
+  )
+}
+
+function StatusButton({
+  u,
+  isSelf,
+  onToggle,
+}: {
+  u: UsuarioSistema
+  isSelf: boolean
+  onToggle: () => Promise<void>
+}) {
+  const [busy, setBusy] = useState(false)
+
+  if (isSelf) return <span className="text-xs text-gray-300">—</span>
+
+  const handleClick = async () => {
+    const msg = u.ativo
+      ? `Desativar o acesso de ${u.nome || u.email}? A pessoa não vai mais conseguir logar no painel.`
+      : `Reativar o acesso de ${u.nome || u.email}?`
+    if (!confirm(msg)) return
+    setBusy(true)
+    try {
+      await onToggle()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={busy}
+      className={`text-xs font-medium disabled:opacity-50 ${
+        u.ativo ? 'text-red-600 hover:text-red-800' : 'text-brand-600 hover:text-brand-800'
+      }`}
+    >
+      {busy ? '...' : u.ativo ? 'Desativar' : 'Reativar'}
     </button>
   )
 }
@@ -145,7 +193,7 @@ function PermsModal({
 }
 
 export default function UsuariosPage() {
-  const { role, loading: roleLoading } = useUserRole()
+  const { role, email: meuEmail, loading: roleLoading } = useUserRole()
   const isAdmin = role === 'admin'
 
   const [usuarios, setUsuarios] = useState<UsuarioSistema[]>([])
@@ -204,6 +252,20 @@ export default function UsuariosPage() {
   const handleCapsChange = useCallback((userId: string, novasCaps: string[]) => {
     setUsuarios((prev) => prev.map((u) => (u.id === userId ? { ...u, caps: novasCaps } : u)))
     setPermsUser((prev) => (prev && prev.id === userId ? { ...prev, caps: novasCaps } : prev))
+  }, [])
+
+  const handleToggleAtivo = useCallback(async (u: UsuarioSistema) => {
+    const res = await authedFetch('/api/usuarios', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: u.id, active: !u.ativo }),
+    })
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}))
+      alert(j.error || 'Não foi possível atualizar o acesso.')
+      return
+    }
+    setUsuarios((prev) => prev.map((x) => (x.id === u.id ? { ...x, ativo: !u.ativo } : x)))
   }, [])
 
   // Enquanto a role não resolve, estado neutro — evita flash de "Carregando usuários" para não-admin.
@@ -283,9 +345,11 @@ export default function UsuariosPage() {
                 <th className="px-6 py-3">Usuário</th>
                 <th className="px-6 py-3">Papel</th>
                 <th className="px-6 py-3">Turma</th>
+                <th className="px-6 py-3">Status</th>
                 <th className="px-6 py-3">Capacidades</th>
                 <th className="px-6 py-3">Criado em</th>
                 <th className="px-6 py-3">Último acesso</th>
+                <th className="px-6 py-3"></th>
               </tr>
             </thead>
             <tbody>
@@ -304,9 +368,13 @@ export default function UsuariosPage() {
                   </td>
                   <td className="px-6 py-3"><RoleTag role={u.role} /></td>
                   <td className="px-6 py-3 text-sm text-gray-600 whitespace-nowrap">{u.turma || '—'}</td>
+                  <td className="px-6 py-3"><AtivoTag ativo={u.ativo} /></td>
                   <td className="px-6 py-3"><CapsCell u={u} onManage={() => setPermsUser(u)} /></td>
                   <td className="px-6 py-3 text-sm text-gray-600">{fmtDate(u.created_at)}</td>
                   <td className="px-6 py-3 text-sm text-gray-600">{fmtDate(u.last_sign_in_at)}</td>
+                  <td className="px-6 py-3">
+                    <StatusButton u={u} isSelf={u.email === meuEmail} onToggle={() => handleToggleAtivo(u)} />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -323,14 +391,16 @@ export default function UsuariosPage() {
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium text-gray-900 truncate">{u.nome || u.email}</p>
                     <RoleTag role={u.role} />
+                    <AtivoTag ativo={u.ativo} />
                   </div>
                   <p className="text-xs text-gray-500 truncate">{u.email}</p>
                   <p className="text-xs text-gray-400 mt-0.5">
                     {u.turma ? `${u.turma} · ` : ''}último acesso {fmtDate(u.last_sign_in_at)}
                   </p>
                 </div>
-                <div className="shrink-0">
+                <div className="shrink-0 flex flex-col items-end gap-2">
                   <CapsCell u={u} onManage={() => setPermsUser(u)} />
+                  <StatusButton u={u} isSelf={u.email === meuEmail} onToggle={() => handleToggleAtivo(u)} />
                 </div>
               </div>
             ))}
