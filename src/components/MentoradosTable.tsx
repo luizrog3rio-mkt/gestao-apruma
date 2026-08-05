@@ -49,7 +49,8 @@ function IgIssueBadge({ issue }: { issue: string | null }) {
 
 function MobileCard({ m, onEdit, lastUpdate }: { m: Mentorado; onEdit?: (m: Mentorado) => void; lastUpdate?: string | null }) {
   const gained = m.seguidores_atual - m.seguidores_inicial
-  const tempo = calcTempoRestante(m.data_inicio, m.plano)
+  const pausado = m.status === 'pausou'
+  const tempo = calcTempoRestante(m.data_inicio, m.plano, pausado ? m.status_at ?? undefined : undefined)
 
   return (
     <div
@@ -105,7 +106,12 @@ function MobileCard({ m, onEdit, lastUpdate }: { m: Mentorado; onEdit?: (m: Ment
         </div>
         <div className="text-center">
           <div className="text-gray-400">Restante</div>
-          <div className="font-bold text-gray-700 text-[11px]">{tempo}</div>
+          <div
+            className="font-bold text-gray-700 text-[11px]"
+            title={pausado ? 'Tempo restante congelado no momento em que pausou' : undefined}
+          >
+            {tempo}{pausado ? ' ⏸️' : ''}
+          </div>
         </div>
       </div>
     </div>
@@ -151,7 +157,8 @@ export default function MentoradosTable({ mentorados, onEdit, lastUpdate }: Prop
             </thead>
             <tbody>
               {mentorados.map((m) => {
-                const tempo = calcTempoRestante(m.data_inicio, m.plano)
+                const pausado = m.status === 'pausou'
+                const tempo = calcTempoRestante(m.data_inicio, m.plano, pausado ? m.status_at ?? undefined : undefined)
                 const gained = m.seguidores_atual - m.seguidores_inicial
                 return (
                   <tr
@@ -198,7 +205,12 @@ export default function MentoradosTable({ mentorados, onEdit, lastUpdate }: Prop
                         {m.status === 'cancelou' ? '❌ Cancelou' : m.status === 'pausou' ? '⏸️ Pausou' : m.status === 'finalizou' ? '🏁 Finalizou' : m.status === 'reembolsado' ? '💸 Reembolsou' : `${m.plano}m`}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-gray-600 text-xs">{tempo}</td>
+                    <td
+                      className="px-4 py-4 text-gray-600 text-xs"
+                      title={pausado ? 'Tempo restante congelado no momento em que pausou' : undefined}
+                    >
+                      {tempo}{pausado ? ' ⏸️' : ''}
+                    </td>
                     {onEdit && (
                       <td className="px-4 py-4">
                         <button
